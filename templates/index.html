@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>空手道比赛 - 主界面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom, #f7f7f7, #ffffff);
+        }
+        .karate-header {
+            border-bottom: 4px solid #b91c1c;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <header class="karate-header bg-gray-900 text-white py-6">
+        <div class="container mx-auto px-4">
+            <h1 class="text-3xl font-bold">空手道比赛管理系统</h1>
+            <p class="mt-2 text-lg">请选择比赛类型</p>
+        </div>
+    </header>
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <div class="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6 space-y-4">
+            <a 
+                href="{{ url_for('school') }}"
+                class="block w-full bg-red-600 text-white py-2 px-4 rounded-md text-center hover:bg-red-700 transition duration-300"
+                aria-label="教育部类比赛"
+            >
+                教育部类比赛
+            </a>
+            <a 
+                href="{{ url_for('ibok') }}"
+                class="block w-full bg-red-600 text-white py-2 px-4 rounded-md text-center hover:bg-red-700 transition duration-300"
+                aria-label="IBKO成人赛"
+            >
+                IBKO成人赛
+            </a>
+        </div>
+    </main>
+    <footer class="bg-gray-900 text-white py-4">
+        <div class="container mx-auto px-4 text-center">
+            <p>© 2025 Tom 版权所有</p>
+        </div>
+    </footer>
+</body>
+</html>
