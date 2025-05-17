@@ -1,4 +1,9 @@
 This program is started. 2025.5.17 10:57 a.m
 accepted.
-ok
-hallo TRAE
+/* task 2025.5.17
+   1. download sqlite3
+   2. create a directory named: "model"
+   3. establish database: ath.db
+   4. move ath.db to model 
+   5. create table: ath_stu, ath_adult in ath.db
+   6. commit
