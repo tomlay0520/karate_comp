@@ -7,3 +7,14 @@ accepted.
    4. move ath.db to model 
    5. create table: ath_stu, ath_adult in ath.db
    6. commit
+
+/* task 2025.5.17 - 2025.5.18
+    1. Beautify the page: upload.html.   
+       p.s: all pages of view layer should be loacated at the directory of templates.
+    2. Establish the main page: main.html --> 2 buttons: 1st button is "education system"
+                                                         2nd button is "IBKO system"
+    3. when user click the 1st button aka "education button", then routes to school.html
+    4. school.html is composed by three elements: 1st element is button named "upload"
+       if users click upload button, then routes to the upload.html
+                                                  2nd element is actually a table classified all athletes
+                                                  3rd element is a button called "generate matching table"
