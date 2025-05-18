@@ -172,16 +172,18 @@ def stu_generate_matching():
     for gender in groups.get('students', {}):
         for group in groups['students'][gender]:
             for program in groups['students'][gender][group]:
-                players = groups['students'][gender][group][program]
-                for i in range(0, len(players), 2):
-                    if i + 1 < len(players):
-                        matches.append({
-                            'player1': players[i].name,
-                            'player2': players[i+1].name,
-                            'gender': gender,
-                            'group': group,
-                            'program': program
-                        })
+                for subgroup in groups['students'][gender][group][program]:
+                    players = groups['students'][gender][group][program][subgroup]
+                    for i in range(0, len(players), 2):
+                        if i + 1 < len(players):
+                            matches.append({
+                                'player1': players[i].name,
+                                'player2': players[i+1].name,
+                                'gender': gender,
+                                'group': group,
+                                'program': program,
+                                'subgroup': subgroup
+                            })
     return render_template('stu_generate_matching.html', matches=matches)
 
 def categorize_players():
@@ -262,11 +264,5 @@ def find_available_port(start_port=5000, max_attempts=10):
     raise OSError(f"无法在端口{start_port}-{start_port+max_attempts-1}范围内找到可用端口")
 
 if __name__ == '__main__':
-    try:
-        port = find_available_port()
-        url = f'http://127.0.0.1:{port}'
-        print(f"正在启动服务器，访问地址: {url}")
-        webbrowser.open(url)
-        app.run(host='127.0.0.1', port=port, debug=True)
-    except OSError as e:
-        print(f"启动失败: {str(e)}")
+    app.run(host='127.0.0.1', port=5000, debug=True)
+    # 移除了webbrowser.open调用，避免重复打开页面
