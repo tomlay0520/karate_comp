@@ -8,7 +8,7 @@ from datetime import datetime
 import sqlite3
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # 生产环境中请替换为安全的密钥
+app.secret_key = 'your_secret_key' 
 app.config['UPLOAD_FOLDER'] = 'Uploads'
 
 # 添加以下两行定义
@@ -69,8 +69,6 @@ class AthAdult(db.Model):
 def init_db():
     with app.app_context():
         print(f"数据库路径: {app.config['SQLALCHEMY_DATABASE_URI']}")
-        # 表已手动创建，仅绑定模型
-        # db.create_all()  # 已注释，避免表创建
 
 # 在应用启动前调用 init_db
 init_db()
@@ -84,9 +82,37 @@ def school():
     groups = categorize_players()
     return render_template('school.html', groups=groups)
 
-@app.route('/ibok')
+@app.route('/ibko')
 def ibok():
     return render_template('ibko.html')
+
+def map_excel_to_db(row):
+    #将Excel行数据映射到数据库字段
+    gender = str(row['性别']).strip()
+    if gender not in ['男', '女']:
+        raise ValueError("性别必须是'男'或'女'")
+    
+    # 处理日期格式，确保返回ISO格式日期字符串
+    try:
+        birth_date = pd.to_datetime(row['出生日期'], errors='coerce')
+        if pd.isna(birth_date):
+            birth_date = datetime.strptime(str(row['出生日期']).split()[0], '%Y-%m-%d')
+        # 转换为ISO格式字符串(YYYY-MM-DD)
+        birth_date = birth_date.strftime('%Y-%m-%d')
+    except:
+        birth_date = datetime.now().strftime('%Y-%m-%d')  
+    
+    return {
+        'name': str(row['姓名']).strip(),
+        'gender': gender,
+        'birth': birth_date,  # 现在返回的是字符串格式的日期
+        'group': str(row['组别']).strip(),
+        'program': str(row['项目']).strip(),
+        'school': str(row['所属学校']).strip() if '所属学校' in row and pd.notna(row['所属学校']) else None,
+        'district': str(row['所属区']).strip() if '所属区' in row and pd.notna(row['所属区']) else None,
+        'emergency_phone_call': str(row['紧急联系人']).strip(),
+        'win_num': 0
+    }
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
@@ -106,79 +132,35 @@ def upload():
             try:
                 file.save(file_path)
                 df = pd.read_excel(file_path)
-                required_columns = ['姓名', '性别', '出生日期', '组别', '项目', '紧急联系电话']
-                if not all(col in df.columns for col in required_columns):
-                    flash('Excel文件缺少必要列: 姓名, 性别, 出生日期, 组别, 项目, 紧急联系电话', 'error')
-                    return redirect(request.url)
                 
-                # 清空现有数据
-                AthStu.query.delete()
-                AthAdult.query.delete()
-                db.session.commit()
+                # 检查数据库表是否存在
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA table_info(ath_stu)")
+                columns = [column[1] for column in cursor.fetchall()]
                 
-                # 插入数据
-                for _, row in df.iterrows():
-                    name = str(row['姓名']).strip() if pd.notna(row['姓名']) else '未知'
-                    gender = str(row['性别']).strip() if pd.notna(row['性别']) else '未知'
-                    if gender not in ['男', '女']:
-                        gender = '未知'
-                    birth = pd.to_datetime(row['出生日期'], errors='coerce') if pd.notna(row['出生日期']) else None
-                    if birth is None:
-                        flash(f'无效的出生日期格式: {row["出生日期"]}', 'error')
-                        continue
-                    group = str(row['组别']).strip() if pd.notna(row['组别']) else '未知'
-                    program = str(row['项目']).strip() if pd.notna(row['项目']) else '未知'
-                    emergency_phone = str(row['紧急联系电话']).strip() if pd.notna(row['紧急联系电话']) else '未知'
-                    win_num = int(row['获奖次数']) if '获奖次数' in df.columns and pd.notna(row['获奖次数']) and str(row['获奖次数']).isdigit() else 0
-                    
-                    # 根据组别或年龄判断是学生还是成人
-                    is_student = '小学' in group or '初中' in group or '高中' in group or '少儿' in group
-                    age = (datetime.now().date() - birth.date()).days // 365
-                    if not is_student and age < 18:
-                        is_student = True
-                    
-                    if is_student:
-                        school = str(row['学校']).strip() if '学校' in df.columns and pd.notna(row['学校']) else None
-                        district = str(row['区']).strip() if '区' in df.columns and pd.notna(row['区']) else None
-                        player = AthStu(
-                            name=name,
-                            gender=gender,
-                            birth=birth,
-                            group=group,
-                            program=program,
-                            school=school,
-                            district=district,
-                            emergency_phone_call=emergency_phone,
-                            win_num=win_num
-                        )
-                    else:
-                        dojo = str(row['道馆']).strip() if '道馆' in df.columns and pd.notna(row['道馆']) else None
-                        belt = str(row['带别']).strip() if '带别' in df.columns and pd.notna(row['带别']) else None
-                        player = AthAdult(
-                            name=name,
-                            gender=gender,
-                            birth=birth,
-                            group=group,
-                            program=program,
-                            dojo=dojo,
-                            emergency_phone_call=emergency_phone,
-                            belt=belt,
-                            win_num=win_num
-                        )
-                    db.session.add(player)
+                # 映射并筛选需要的字段
+                mapped_data = [map_excel_to_db(row) for _, row in df.iterrows()]
+                filtered_df = pd.DataFrame(mapped_data)
                 
-                db.session.commit()
-                flash('选手信息上传成功', 'success')
+                # 确保只写入数据库表中存在的列
+                filtered_df = filtered_df[[col for col in filtered_df.columns if col in columns]]
+                
+                # 将数据写入ath_stu表
+                filtered_df.to_sql('ath_stu', conn, if_exists='append', index=False)
+                
+                conn.close()
+                flash('数据导入成功！', 'success')
                 return redirect('/school')
+                
             except Exception as e:
-                db.session.rollback()
-                flash(f'文件处理错误: {str(e)}', 'error')
+                flash(f'导入失败: {str(e)}', 'error')
                 return redirect(request.url)
             finally:
                 if os.path.exists(file_path):
                     os.remove(file_path)
         else:
-            flash('请上传.xlsx文件', 'error')
+            flash('请上传有效的Excel文件(.xlsx)', 'error')
             return redirect(request.url)
     return render_template('upload.html')
 
@@ -208,7 +190,6 @@ def categorize_players():
         'adults': {'男': {}, '女': {}, '未知': {}}
     }
     
-    # 查询学生
     students = AthStu.query.all()
     for player in students:
         gender = player.gender or '未知'
@@ -252,7 +233,6 @@ def categorize_players():
         
         groups['adults'][gender][group][program][subgroup].append(player)
     
-    # 清理空分组
     for category in ['students', 'adults']:
         for gender in list(groups[category].keys()):
             for group in list(groups[category][gender].keys()):
@@ -269,13 +249,24 @@ def categorize_players():
     
     return groups
 
+def find_available_port(start_port=5000, max_attempts=10):
+    """查找可用的端口"""
+    import socket
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('127.0.0.1', port))
+                return port
+        except OSError:
+            continue
+    raise OSError(f"无法在端口{start_port}-{start_port+max_attempts-1}范围内找到可用端口")
+
 if __name__ == '__main__':
     try:
-        url = 'http://127.0.0.1:5001'
+        port = find_available_port()
+        url = f'http://127.0.0.1:{port}'
+        print(f"正在启动服务器，访问地址: {url}")
         webbrowser.open(url)
-        app.run(host='127.0.0.1', port=5001, debug=True)
+        app.run(host='127.0.0.1', port=port, debug=True)
     except OSError as e:
-        print(f"端口 5001 被占用，尝试 5002 端口...")
-        url = 'http://127.0.0.1:5002'
-        webbrowser.open(url)
-        app.run(host='127.0.0.1', port=5002, debug=True)
+        print(f"启动失败: {str(e)}")

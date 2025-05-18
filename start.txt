@@ -18,3 +18,8 @@ accepted.
        if users click upload button, then routes to the upload.html
                                                   2nd element is actually a table classified all athletes
                                                   3rd element is a button called "generate matching table"
+
+/*  task 2025.5.18
+     1. test the mapping from excel to database
+     2. fix the bug of unexpected port number: 5001-->5000 (default port)
+        P.S: YOU ARE NOT ALLOWED TO MODIFY THE DATABASE OR MAIN FUNCTION
