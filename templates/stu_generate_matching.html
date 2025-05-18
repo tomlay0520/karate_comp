@@ -29,9 +29,15 @@
                     {{ match.group }} - {{ match.gender }}
                 </h3>
                 <div class="flex justify-between items-center">
-                    <span class="text-lg">{{ match.player1 }}</span>
+                    <div>
+                        <span class="text-lg">{{ match.player1 }}</span>
+                        <span class="text-sm text-gray-500 ml-2">({{ match.school1 or '未知学校' }})</span>
+                    </div>
                     <span class="mx-4 text-gray-500">VS</span>
-                    <span class="text-lg">{{ match.player2 }}</span>
+                    <div>
+                        <span class="text-lg">{{ match.player2 }}</span>
+                        <span class="text-sm text-gray-500 ml-2">({{ match.school2 or '未知学校' }})</span>
+                    </div>
                 </div>
             </div>
             {% endfor %}

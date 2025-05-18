@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, flash
+from flask import Flask, render_template, request, redirect, flash, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import pandas as pd
 from werkzeug.utils import secure_filename
@@ -174,15 +174,34 @@ def stu_generate_matching():
             for program in groups['students'][gender][group]:
                 for subgroup in groups['students'][gender][group][program]:
                     players = groups['students'][gender][group][program][subgroup]
-                    for i in range(0, len(players), 2):
-                        if i + 1 < len(players):
+                    # 按学校分组
+                    school_groups = {}
+                    for player in players:
+                        school = player.school or "未知学校"
+                        if school not in school_groups:
+                            school_groups[school] = []
+                        school_groups[school].append(player)
+                    
+                    # 生成对阵，确保不同学校
+                    all_players = []
+                    for school, school_players in school_groups.items():
+                        all_players.extend(school_players)
+                    
+                    for i in range(0, len(all_players), 2):
+                        if i + 1 < len(all_players):
+                            # 检查是否同校
+                            if all_players[i].school == all_players[i+1].school:
+                                # 如果同校，跳过这对组合
+                                continue
                             matches.append({
-                                'player1': players[i].name,
-                                'player2': players[i+1].name,
+                                'player1': all_players[i].name,
+                                'player2': all_players[i+1].name,
                                 'gender': gender,
                                 'group': group,
                                 'program': program,
-                                'subgroup': subgroup
+                                'subgroup': subgroup,
+                                'school1': all_players[i].school,
+                                'school2': all_players[i+1].school
                             })
     return render_template('stu_generate_matching.html', matches=matches)
 
@@ -192,7 +211,8 @@ def categorize_players():
         'adults': {'男': {}, '女': {}, '未知': {}}
     }
     
-    students = AthStu.query.all()
+    # 学生选手按胜场数排序
+    students = AthStu.query.order_by(AthStu.win_num.desc()).all()
     for player in students:
         gender = player.gender or '未知'
         group = player.group or '其它'
@@ -213,8 +233,8 @@ def categorize_players():
         
         groups['students'][gender][group][program][subgroup].append(player)
     
-    # 查询成人
-    adults = AthAdult.query.all()
+    # 成人选手按胜场数排序
+    adults = AthAdult.query.order_by(AthAdult.win_num.desc()).all()
     for player in adults:
         gender = player.gender or '未知'
         group = player.group or '其它'
@@ -262,6 +282,26 @@ def find_available_port(start_port=5000, max_attempts=10):
         except OSError:
             continue
     raise OSError(f"无法在端口{start_port}-{start_port+max_attempts-1}范围内找到可用端口")
+
+@app.route('/api/player/<int:player_id>')
+def get_player_details(player_id):
+    player = AthStu.query.get(player_id)
+    if not player:
+        player = AthAdult.query.get(player_id)
+        if not player:
+            return jsonify({'error': '选手不存在'}), 404
+    
+    return jsonify({
+        'name': player.name,
+        'gender': player.gender,
+        'birth': player.birth,
+        'group': player.group,
+        'program': player.program,
+        'school': player.school,
+        'district': player.district,
+        'emergency_phone_call': player.emergency_phone_call,
+        'win_num': player.win_num
+    })
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)

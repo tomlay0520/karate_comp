@@ -8,6 +8,7 @@
     <style>
         body {
             background: linear-gradient(to bottom, #f7f7f7, #ffffff);
+            min-height: 100vh;
         }
         .karate-header {
             border-bottom: 4px solid #b91c1c;
@@ -21,57 +22,66 @@
         .divider {
             border-top: 2px solid #fee2e2;
         }
+        .player-item {
+            transition: background-color 0.2s ease;
+        }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="flex flex-col">
     <header class="karate-header bg-gray-900 text-white py-6">
         <div class="container mx-auto px-4">
             <h1 class="text-3xl font-bold">教育部类比赛</h1>
             <p class="mt-2 text-lg">管理选手信息与比赛</p>
         </div>
     </header>
+
     <main class="flex-grow container mx-auto px-4 py-8">
-        <div class="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6 space-y-4">
-            <a 
-                href="{{ url_for('upload') }}"
-                class="block w-full bg-red-600 text-white py-2 px-4 rounded-md text-center hover:bg-red-700 transition duration-300"
-                aria-label="上传选手信息"
-            >
+        <div class="max-w-md mx-auto space-y-4 mb-8">
+            <a href="{{ url_for('upload') }}" 
+               class="block w-full bg-red-600 text-white py-2 px-4 rounded-md text-center hover:bg-red-700 transition">
                 上传选手信息
             </a>
-            <a 
-                href="{{ url_for('stu_generate_matching') }}"
-                class="block w-full bg-red-600 text-white py-2 px-4 rounded-md text-center hover:bg-red-700 transition duration-300"
-                aria-label="启动比赛"
-            >
+            <a href="{{ url_for('stu_generate_matching') }}" 
+               class="block w-full bg-red-600 text-white py-2 px-4 rounded-md text-center hover:bg-red-700 transition">
                 启动比赛
             </a>
         </div>
+
         {% if groups %}
-        <div class="mt-12">
-            <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">选手分组</h2>
-            {% for gender, categories in groups.items() %}
-            <div class="mb-8 group-card bg-white rounded-lg shadow-md p-6 border border-red-100">
-                <h3 class="text-2xl font-semibold text-red-600 mb-4 flex items-center">
-                    <span class="mr-2">👥</span>{{ gender }}
-                </h3>
-                <div class="divider mb-4"></div>
-                {% for category, projects in categories.items() %}
-                <div class="ml-2 mt-4">
-                    <h4 class="text-xl font-medium text-gray-700 mb-3">{{ category }}</h4>
-                    {% for project, subgroups in projects.items() %}
-                    <div class="ml-2 mt-3 bg-gray-50 rounded-md p-4">
-                        <h5 class="text-lg font-medium text-red-500 mb-2">{{ project }}</h5>
-                        {% for subgroup, players in subgroups.items() %}
-                        <div class="ml-2 mt-2">
-                            <h6 class="text-md font-medium text-gray-600 mb-2">{{ subgroup }}</h6>
-                            <ul class="list-none space-y-2">
-                                {% for player in players %}
-                                <li class="bg-white p-3 rounded-md shadow-sm border border-gray-100 hover:bg-red-50 transition duration-200">
-                                    {{ player.name }} ({{ player.age if player.age != None else '年龄未知' }}, {{ player.group }})
-                                </li>
-                                {% endfor %}
-                            </ul>
+        <div class="space-y-8">
+            <h2 class="text-3xl font-bold text-gray-800 text-center">选手分组</h2>
+            
+            <!-- 学生选手分组 -->
+            <div class="space-y-8">
+                {% for gender, groups in groups['students'].items() %}
+                <div class="group-card bg-white rounded-lg shadow-md p-6 border border-red-100">
+                    <h3 class="text-2xl font-semibold text-red-600 mb-4">
+                        <span class="mr-2">👥</span>{{ gender }}选手
+                    </h3>
+                    
+                    <div class="divider mb-4"></div>
+                    
+                    {% for group_name, programs in groups.items() %}
+                    <div class="mb-6">
+                        <h4 class="text-xl font-medium text-gray-700 mb-3">{{ group_name }}组</h4>
+                        
+                        {% for program_type, subgroups in programs.items() %}
+                        <div class="ml-2 mt-4 bg-gray-50 rounded-md p-4">
+                            <h5 class="text-lg font-medium text-red-500 mb-2">{{ program_type }}项目</h5>
+                            
+                            {% for subgroup_name, players in subgroups.items() %}
+                            <div class="ml-2 mt-3">
+                                <h6 class="text-md font-medium text-gray-600 mb-2">{{ subgroup_name }}</h6>
+                                <ul class="space-y-2">
+                                    {% for player in players %}
+                                    <li class="player-item bg-white p-3 rounded-md shadow-sm border border-gray-100 hover:bg-red-50 cursor-pointer"
+                                        onclick="showPlayerDetails('{{ player.id }}')">
+                                        {{ player.name }}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endfor %}
                         </div>
                         {% endfor %}
                     </div>
@@ -79,18 +89,52 @@
                 </div>
                 {% endfor %}
             </div>
-            {% endfor %}
         </div>
         {% else %}
-        <div class="mt-12 text-center">
+        <div class="text-center py-8">
             <p class="text-lg text-gray-600">暂无选手分组信息，请上传选手数据。</p>
         </div>
         {% endif %}
     </main>
+
     <footer class="bg-gray-900 text-white py-4">
         <div class="container mx-auto px-4 text-center">
             <p>© 2025 Yurong J & Lei T 版权所有</p>
         </div>
     </footer>
+
+    <!-- 在body结束前添加 -->
+    <script>
+        async function showPlayerDetails(playerId) {
+            const response = await fetch(`/api/player/${playerId}`);
+            const data = await response.json();
+            
+            // 创建悬浮对话框
+            const dialog = document.createElement('div');
+            dialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialog.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-md w-full">
+                    <h3 class="text-xl font-bold mb-4">选手详情</h3>
+                    <div class="space-y-2">
+                        <p><span class="font-medium">姓名:</span> ${data.name}</p>
+                        <p><span class="font-medium">性别:</span> ${data.gender}</p>
+                        <p><span class="font-medium">出生日期:</span> ${data.birth}</p>
+                        <p><span class="font-medium">组别:</span> ${data.group}</p>
+                        <p><span class="font-medium">项目:</span> ${data.program}</p>
+                        <p><span class="font-medium">学校:</span> ${data.school || '无'}</p>
+                        <p><span class="font-medium">区县:</span> ${data.district || '无'}</p>
+                        <p><span class="font-medium">紧急联系人:</span> ${data.emergency_phone_call}</p>
+                        <p><span class="font-medium">胜场数:</span> ${data.win_num}</p>
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove()" 
+                            class="mt-4 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700">
+                        关闭
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(dialog);
+        }
+    </script>
 </body>
 </html>
