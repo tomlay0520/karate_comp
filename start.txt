@@ -26,4 +26,7 @@ accepted.
 
 /*  task 2025.5.18-2025.5.19
    1. create the excel for IBKO Adult competition --> send it to Lei
-   2. after 19:00 p.m: build the page for IBKO
+   2. after 19:00 p.m: build the page for IBKO、
+
+/*  task 2025.5.19
+    1. test new functions.
