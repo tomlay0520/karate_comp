@@ -303,6 +303,24 @@ def get_player_details(player_id):
         'win_num': player.win_num
     })
 
+@app.route('/update_winner', methods=['POST'])
+def update_winner():
+    data = request.get_json()
+    winner_name = data['winner']
+    
+    # 更新学生表
+    student = AthStu.query.filter_by(name=winner_name).first()
+    if student:
+        student.win_num += 1
+    else:
+        # 更新成人表
+        adult = AthAdult.query.filter_by(name=winner_name).first()
+        if adult:
+            adult.win_num += 1
+    
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=True)
     # 移除了webbrowser.open调用，避免重复打开页面

@@ -12,6 +12,44 @@
         .karate-header {
             border-bottom: 4px solid #b91c1c;
         }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .match-item {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .match-item:hover {
+            transform: scale(1.02);
+        }
+        .completed-match {
+            background-color: #526ca0;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -24,7 +62,7 @@
         {% if matches %}
         <div class="space-y-6">
             {% for match in matches %}
-            <div class="bg-white p-4 rounded-lg shadow">
+            <div class="match-item bg-white p-4 rounded-lg shadow" onclick="openModal('{{ match.player1 }}','{{ match.player2 }}','{{ match.gender }}','{{ match.group }}','{{ match.program }}','{{ match.subgroup }}','{{ match.school1 }}','{{ match.school2 }}')">
                 <h3 class="text-xl font-semibold text-red-600 mb-2">
                     {{ match.group }} - {{ match.gender }}
                 </h3>
@@ -51,5 +89,98 @@
             <p>© 2025 Yurong J & Lei T 版权所有</p>
         </div>
     </footer>
+    <div id="matchModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 class="text-xl font-bold mb-4" id="modalTitle"></h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <h3 class="font-semibold" id="player1Name"></h3>
+                    <p id="player1School"></p>
+                    <button id="player1Win" class="win-btn mt-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600" onclick="selectWinner(1)">胜</button>
+                </div>
+                <div>
+                    <h3 class="font-semibold" id="player2Name"></h3>
+                    <p id="player2School"></p>
+                    <button id="player2Win" class="win-btn mt-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600" onclick="selectWinner(2)">胜</button>
+                </div>
+            </div>
+            <div class="mt-4">
+                <p id="matchDetails"></p>
+            </div>
+        </div>
+    </div>
+    <script>
+        let currentMatchData = null;
+
+        function openModal(p1, p2, gender, group, program, subgroup, school1, school2) {
+            currentMatchData = {
+                player1: p1,
+                player2: p2,
+                gender: gender,
+                group: group,
+                program: program,
+                subgroup: subgroup
+            };
+            
+            document.getElementById('modalTitle').textContent = `${p1} vs ${p2}`;
+            document.getElementById('player1Name').textContent = p1;
+            document.getElementById('player2Name').textContent = p2;
+            document.getElementById('player1School').textContent = `学校: ${school1 || '未知'}`;
+            document.getElementById('player2School').textContent = `学校: ${school2 || '未知'}`;
+            document.getElementById('matchDetails').textContent = 
+                `组别: ${gender} ${group} ${program} ${subgroup}`;
+            
+            // 重置按钮状态
+            document.getElementById('player1Win').disabled = false;
+            document.getElementById('player2Win').disabled = false;
+            document.getElementById('player1Win').classList.remove('bg-gray-400');
+            document.getElementById('player1Win').classList.add('bg-green-500');
+            document.getElementById('player2Win').classList.remove('bg-gray-400');
+            document.getElementById('player2Win').classList.add('bg-green-500');
+            
+            document.getElementById('matchModal').style.display = 'block';
+        }
+
+        function selectWinner(winner) {
+            const winnerBtn = document.getElementById(`player${winner}Win`);
+            const loserBtn = document.getElementById(`player${3-winner}Win`);
+            
+            // 更新按钮状态
+            winnerBtn.classList.remove('bg-green-500');
+            winnerBtn.classList.add('bg-blue-500');
+            winnerBtn.disabled = true;
+            
+            loserBtn.classList.remove('bg-green-500');
+            loserBtn.classList.add('bg-gray-400');
+            loserBtn.disabled = true;
+            
+            // 找到当前对阵栏目并标记为已完成
+            const matchItems = document.querySelectorAll('.match-item');
+            matchItems.forEach(item => {
+                if (item.textContent.includes(currentMatchData.player1) && 
+                    item.textContent.includes(currentMatchData.player2)) {
+                    item.classList.add('completed-match');
+                    item.onclick = null; // 移除点击事件
+                }
+            });
+            
+            // 发送数据到后端更新数据库
+            fetch('/update_winner', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ...currentMatchData,
+                    winner: winner === 1 ? currentMatchData.player1 : currentMatchData.player2
+                })
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('matchModal').style.display = 'none';
+        }
+    </script>
 </body>
 </html>
