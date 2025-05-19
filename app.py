@@ -86,7 +86,7 @@ def school():
 def ibok():
     return render_template('ibko.html')
 
-def map_excel_to_db(row):
+def map_excel_to_db(row, name_counter=None):
     #将Excel行数据映射到数据库字段
     gender = str(row['性别']).strip()
     if gender not in ['男', '女']:
@@ -102,10 +102,16 @@ def map_excel_to_db(row):
     except:
         birth_date = datetime.now().strftime('%Y-%m-%d')  
     
+    # 处理重名情况
+    original_name = str(row['姓名']).strip()
+    name = original_name
+    if name_counter and name_counter.get(original_name, 0) > 0:
+        name = f"{original_name}{name_counter[original_name]}"
+    
     return {
-        'name': str(row['姓名']).strip(),
+        'name': name,
         'gender': gender,
-        'birth': birth_date,  # 现在返回的是字符串格式的日期
+        'birth': birth_date,
         'group': str(row['组别']).strip(),
         'program': str(row['项目']).strip(),
         'school': str(row['所属学校']).strip() if '所属学校' in row and pd.notna(row['所属学校']) else None,
@@ -133,17 +139,30 @@ def upload():
                 file.save(file_path)
                 df = pd.read_excel(file_path)
                 
+                # 检查重名并计数
+                name_counts = {}
+                name_counter = {}
+                for name in df['姓名']:
+                    name = str(name).strip()
+                    name_counts[name] = name_counts.get(name, 0) + 1
+                
+                # 映射并筛选需要的字段
+                mapped_data = []
+                for _, row in df.iterrows():
+                    name = str(row['姓名']).strip()
+                    if name_counts[name] > 1:
+                        name_counter[name] = name_counter.get(name, 0) + 1
+                        mapped_data.append(map_excel_to_db(row, name_counter))
+                    else:
+                        mapped_data.append(map_excel_to_db(row))
+                
                 # 检查数据库表是否存在
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
                 cursor.execute("PRAGMA table_info(ath_stu)")
                 columns = [column[1] for column in cursor.fetchall()]
                 
-                # 映射并筛选需要的字段
-                mapped_data = [map_excel_to_db(row) for _, row in df.iterrows()]
                 filtered_df = pd.DataFrame(mapped_data)
-                
-                # 确保只写入数据库表中存在的列
                 filtered_df = filtered_df[[col for col in filtered_df.columns if col in columns]]
                 
                 # 将数据写入ath_stu表
@@ -168,15 +187,23 @@ def upload():
 def stu_generate_matching():
     groups = categorize_players()
     matches = []
+    
     # 仅为学生（ath_stu）生成对阵
     for gender in groups.get('students', {}):
         for group in groups['students'][gender]:
             for program in groups['students'][gender][group]:
                 for subgroup in groups['students'][gender][group][program]:
                     players = groups['students'][gender][group][program][subgroup]
+                    
+                    # 找出当前分组中的最大胜场数
+                    max_win = max(p.win_num for p in players) if players else 0
+                    
+                    # 筛选出胜场数等于最大值的选手
+                    top_players = [p for p in players if p.win_num == max_win]
+                    
                     # 按学校分组
                     school_groups = {}
-                    for player in players:
+                    for player in top_players:
                         school = player.school or "未知学校"
                         if school not in school_groups:
                             school_groups[school] = []
@@ -191,8 +218,8 @@ def stu_generate_matching():
                         if i + 1 < len(all_players):
                             # 检查是否同校
                             if all_players[i].school == all_players[i+1].school:
-                                # 如果同校，跳过这对组合
                                 continue
+                            
                             matches.append({
                                 'player1': all_players[i].name,
                                 'player2': all_players[i+1].name,
