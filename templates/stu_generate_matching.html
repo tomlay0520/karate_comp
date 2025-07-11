@@ -91,7 +91,7 @@
     </footer>
     <div id="matchModal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
+            <span class="close" onclick="closeModal()">×</span>
             <h2 class="text-xl font-bold mb-4" id="modalTitle"></h2>
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -108,10 +108,18 @@
             <div class="mt-4">
                 <p id="matchDetails"></p>
             </div>
+            <div class="mt-4 flex justify-center space-x-4">
+                <button id="startTimer" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600" onclick="startTimer()">开始</button>
+                <button id="pauseTimer" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600" onclick="pauseTimer()" disabled>暂停</button>
+                <button id="resumeTimer" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600" onclick="resumeTimer()" disabled>恢复</button>
+            </div>
         </div>
     </div>
     <script>
         let currentMatchData = null;
+        let remainingSeconds = 180; // 3分钟 = 180秒
+        let timerInterval = null;
+        let matchStarted = false;
 
         function openModal(p1, p2, gender, group, program, subgroup, school1, school2) {
             currentMatchData = {
@@ -120,7 +128,9 @@
                 gender: gender,
                 group: group,
                 program: program,
-                subgroup: subgroup
+                subgroup: subgroup,
+                school1: school1,
+                school2: school2
             };
             
             document.getElementById('modalTitle').textContent = `${p1} vs ${p2}`;
@@ -138,8 +148,93 @@
             document.getElementById('player1Win').classList.add('bg-green-500');
             document.getElementById('player2Win').classList.remove('bg-gray-400');
             document.getElementById('player2Win').classList.add('bg-green-500');
-            
-            document.getElementById('matchModal').style.display = 'block';
+            document.getElementById('startTimer').disabled = false;
+            document.getElementById('pauseTimer').disabled = true;
+            document.getElementById('resumeTimer').disabled = true;
+
+            matchStarted = false;
+            remainingSeconds = 180;
+
+            // 通知后端比赛信息，但不启动倒计时
+            fetch('/update_match', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: 'match_update',
+                    ...currentMatchData
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.status === 'success') {
+                      document.getElementById('matchModal').style.display = 'block';
+                  }
+              });
+        }
+
+        function startTimer() {
+            if (matchStarted) return;
+            matchStarted = true;
+            document.getElementById('startTimer').disabled = true;
+            document.getElementById('pauseTimer').disabled = false;
+            document.getElementById('resumeTimer').disabled = true;
+            startLocalTimer();
+            fetch('/start_match', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: 'start_match',
+                    remainingSeconds: remainingSeconds
+                })
+            });
+        }
+
+        function startLocalTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (remainingSeconds > 0) {
+                    remainingSeconds--;
+                } else {
+                    clearInterval(timerInterval);
+                    document.getElementById('pauseTimer').disabled = true;
+                    document.getElementById('resumeTimer').disabled = true;
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            clearInterval(timerInterval);
+            document.getElementById('pauseTimer').disabled = true;
+            document.getElementById('resumeTimer').disabled = false;
+            fetch('/update_timer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: 'timer_pause',
+                    remainingSeconds: remainingSeconds
+                })
+            });
+        }
+
+        function resumeTimer() {
+            startLocalTimer();
+            document.getElementById('pauseTimer').disabled = false;
+            document.getElementById('resumeTimer').disabled = true;
+            fetch('/update_timer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: 'timer_resume',
+                    remainingSeconds: remainingSeconds
+                })
+            });
         }
 
         function selectWinner(winner) {
@@ -154,28 +249,43 @@
             loserBtn.classList.remove('bg-green-500');
             loserBtn.classList.add('bg-gray-400');
             loserBtn.disabled = true;
+
+            // 禁用控制按钮
+            document.getElementById('startTimer').disabled = true;
+            document.getElementById('pauseTimer').disabled = true;
+            document.getElementById('resumeTimer').disabled = true;
+
+            // 停止本地倒计时
+            clearInterval(timerInterval);
             
-            // 找到当前对阵栏目并标记为已完成
+            // 标记对阵为已完成
             const matchItems = document.querySelectorAll('.match-item');
             matchItems.forEach(item => {
                 if (item.textContent.includes(currentMatchData.player1) && 
                     item.textContent.includes(currentMatchData.player2)) {
                     item.classList.add('completed-match');
-                    item.onclick = null; // 移除点击事件
+                    item.onclick = null;
                 }
             });
             
-            // 发送数据到后端更新数据库
+            // 发送获胜者数据到后端
             fetch('/update_winner', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    ...currentMatchData,
-                    winner: winner === 1 ? currentMatchData.player1 : currentMatchData.player2
+                    type: 'winner',
+                    winner: winner === 1 ? currentMatchData.player1 : currentMatchData.player2,
+                    school: winner === 1 ? currentMatchData.school1 : currentMatchData.school2,
+                    ...currentMatchData
                 })
-            });
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.status === 'success') {
+                      closeModal();
+                  }
+              });
         }
 
         function closeModal() {
