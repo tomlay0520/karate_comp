@@ -186,6 +186,7 @@ def upload():
 @app.route('/stu_generate_matching')
 def stu_generate_matching():
     groups = categorize_players()
+    print("分组数据:", groups)  # 添加调试信息
     matches = []
     
     # 仅为学生（ath_stu）生成对阵
@@ -230,6 +231,7 @@ def stu_generate_matching():
                                 'school1': all_players[i].school,
                                 'school2': all_players[i+1].school
                             })
+    print("生成的对阵数据:", matches)  # 添加调试信息
     return render_template('stu_generate_matching.html', matches=matches)
 
 def categorize_players():
@@ -349,5 +351,5 @@ def update_winner():
     return jsonify({'status': 'success'})
 
 if __name__ == '__main__':
+    # main function here
     app.run(host='127.0.0.1', port=5000, debug=True)
-    # 移除了webbrowser.open调用，避免重复打开页面
