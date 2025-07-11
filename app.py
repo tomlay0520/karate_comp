@@ -195,42 +195,26 @@ def stu_generate_matching():
             for program in groups['students'][gender][group]:
                 for subgroup in groups['students'][gender][group][program]:
                     players = groups['students'][gender][group][program][subgroup]
+                    # 用于记录已经参与对阵的选手
+                    matched_players = set()
                     
-                    # 找出当前分组中的最大胜场数
-                    max_win = max(p.win_num for p in players) if players else 0
-                    
-                    # 筛选出胜场数等于最大值的选手
-                    top_players = [p for p in players if p.win_num == max_win]
-                    
-                    # 按学校分组
-                    school_groups = {}
-                    for player in top_players:
-                        school = player.school or "未知学校"
-                        if school not in school_groups:
-                            school_groups[school] = []
-                        school_groups[school].append(player)
-                    
-                    # 生成对阵，确保不同学校
-                    all_players = []
-                    for school, school_players in school_groups.items():
-                        all_players.extend(school_players)
-                    
-                    for i in range(0, len(all_players), 2):
-                        if i + 1 < len(all_players):
-                            # 检查是否同校
-                            if all_players[i].school == all_players[i+1].school:
-                                continue
-                            
-                            matches.append({
-                                'player1': all_players[i].name,
-                                'player2': all_players[i+1].name,
-                                'gender': gender,
-                                'group': group,
-                                'program': program,
-                                'subgroup': subgroup,
-                                'school1': all_players[i].school,
-                                'school2': all_players[i+1].school
-                            })
+                    for i in range(len(players)):
+                        if players[i].id not in matched_players:
+                            for j in range(i + 1, len(players)):
+                                if players[j].id not in matched_players and players[i].school != players[j].school:
+                                    matches.append({
+                                        'player1': players[i].name,
+                                        'player2': players[j].name,
+                                        'gender': gender,
+                                        'group': group,
+                                        'program': program,
+                                        'subgroup': subgroup,
+                                        'school1': players[i].school,
+                                        'school2': players[j].school
+                                    })
+                                    matched_players.add(players[i].id)
+                                    matched_players.add(players[j].id)
+                                    break
     print("生成的对阵数据:", matches)  # 添加调试信息
     return render_template('stu_generate_matching.html', matches=matches)
 
