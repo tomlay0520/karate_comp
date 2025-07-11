@@ -178,6 +178,22 @@ def stu_generate_matching():
     print("生成的对阵数据:", matches)
     return render_template('stu_generate_matching.html', matches=matches)
 
+# 路由：选择胜利者
+@app.route('/select_winner', methods=['POST'])
+def select_winner():
+    data = request.get_json()
+    winner = data.get('winner')
+    school = data.get('school')
+    
+    # 广播胜利信息
+    socketio.emit('winner', {
+        'type': 'winner',
+        'winner': winner,
+        'school': school
+    }, namespace='/ws/match_updates')
+    
+    return jsonify({'status': 'success'})
+
 # 路由：上传选手信息
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
@@ -300,7 +316,12 @@ def update_match():
 @app.route('/start_match', methods=['POST'])
 def start_match():
     global current_timer
-    current_timer = {'remaining_seconds': 180, 'is_paused': False, 'match_active': True}
+    data = request.get_json()
+    current_timer = {
+        'remaining_seconds': data['remainingSeconds'],
+        'is_paused': False,
+        'match_active': True
+    }
     
     # 启动倒计时
     start_timer_thread()
@@ -325,6 +346,39 @@ def update_timer():
             'remainingSeconds': current_timer['remaining_seconds']
         }, namespace='/ws/match_updates')
         start_timer_thread()
+    elif data['type'] == 'timer_update':
+        current_timer['remaining_seconds'] = data['remainingSeconds']
+        socketio.emit('timer_update', {
+            'type': 'timer_update',
+            'remainingSeconds': current_timer['remaining_seconds']
+        }, namespace='/ws/match_updates')
+    return jsonify({'status': 'success'})
+
+# 路由：暂停比赛
+@app.route('/pause_match', methods=['POST'])
+def pause_match():
+    global current_timer
+    data = request.get_json()
+    current_timer['remaining_seconds'] = data['remainingSeconds']
+    current_timer['is_paused'] = True
+    socketio.emit('timer_pause', {
+        'type': 'timer_pause',
+        'remainingSeconds': current_timer['remaining_seconds']
+    }, namespace='/ws/match_updates')
+    return jsonify({'status': 'success'})
+
+# 路由：恢复比赛
+@app.route('/resume_match', methods=['POST'])
+def resume_match():
+    global current_timer
+    data = request.get_json()
+    current_timer['remaining_seconds'] = data['remainingSeconds']
+    current_timer['is_paused'] = False
+    socketio.emit('timer_resume', {
+        'type': 'timer_resume',
+        'remainingSeconds': current_timer['remaining_seconds']
+    }, namespace='/ws/match_updates')
+    start_timer_thread()
     return jsonify({'status': 'success'})
 
 # 路由：更新获胜者
@@ -449,12 +503,51 @@ def test():
 def handle_connect():
     print('客户端已连接')
 
+# 注释掉原有的重复路由定义部分
+# # 路由：处理比赛信息更新
+# @app.route('/update_match', methods=['POST'])
+# def update_match():
+#     data = request.get_json()
+#     socketio.emit('match_update', data, namespace='/ws/match_updates')
+#     return jsonify({'status': 'success'})
+# 
+# # 路由：处理开始比赛
+# @app.route('/start_match', methods=['POST'])
+# def start_match():
+#     global current_timer
+#     data = request.get_json()
+#     current_timer['remaining_seconds'] = data['remainingSeconds']
+#     current_timer['is_paused'] = False
+#     current_timer['match_active'] = True
+#     start_timer_thread()
+#     return jsonify({'status': 'success'})
+# 
+# # 路由：处理暂停比赛
+# @app.route('/pause_match', methods=['POST'])
+# def pause_match():
+#     global current_timer
+#     data = request.get_json()
+#     current_timer['remaining_seconds'] = data['remainingSeconds']
+#     current_timer['is_paused'] = True
+#     socketio.emit('timer_pause', data, namespace='/ws/match_updates')
+#     return jsonify({'status': 'success'})
+# 
+# # 路由：处理恢复比赛
+# @app.route('/resume_match', methods=['POST'])
+# def resume_match():
+#     global current_timer
+#     data = request.get_json()
+#     current_timer['remaining_seconds'] = data['remainingSeconds']
+#     current_timer['is_paused'] = False
+#     socketio.emit('timer_resume', data, namespace='/ws/match_updates')
+#     return jsonify({'status': 'success'})
+
 @socketio.on('disconnect', namespace='/ws/match_updates')
 def handle_disconnect():
     print('客户端已断开')
 
 if __name__ == '__main__':
-    with app.app_context():
+    with app.app_context(): 
         init_db()
     port = find_available_port()
     socketio.run(app, host='0.0.0.0', port=port, debug=True)

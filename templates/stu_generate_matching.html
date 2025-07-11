@@ -50,6 +50,13 @@
             cursor: not-allowed;
             opacity: 0.7;
         }
+        .win-btn:disabled, .timer-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .paused {
+            background-color: #9ca3af !important;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -62,7 +69,7 @@
         {% if matches %}
         <div class="space-y-6">
             {% for match in matches %}
-            <div class="match-item bg-white p-4 rounded-lg shadow" onclick="openModal('{{ match.player1 }}','{{ match.player2 }}','{{ match.gender }}','{{ match.group }}','{{ match.program }}','{{ match.subgroup }}','{{ match.school1 }}','{{ match.school2 }}')">
+            <div class="match-item bg-white p-4 rounded-lg shadow" onclick="openModal('{{ match.player1 }}', '{{ match.player2 }}', '{{ match.gender }}', '{{ match.group }}', '{{ match.program }}', '{{ match.subgroup }}', '{{ match.school1 }}', '{{ match.school2 }}')">
                 <h3 class="text-xl font-semibold text-red-600 mb-2">
                     {{ match.group }} - {{ match.gender }}
                 </h3>
@@ -113,6 +120,7 @@
                 <button id="pauseTimer" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600" onclick="pauseTimer()" disabled>暂停</button>
                 <button id="resumeTimer" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600" onclick="resumeTimer()" disabled>恢复</button>
             </div>
+            <div class="mt-4 text-center" id="timerDisplayReferee" style="font-size: 1.5rem; color: #b91c1c;">倒计时: 03:00</div>
         </div>
     </div>
     <script>
@@ -122,6 +130,18 @@
         let matchStarted = false;
 
         function openModal(p1, p2, gender, group, program, subgroup, school1, school2) {
+            // 打开新的 spectator 页面并传递参数
+            const params = new URLSearchParams();
+            params.append('player1', p1);
+            params.append('player2', p2);
+            params.append('gender', gender);
+            params.append('group', group);
+            params.append('program', program);
+            params.append('subgroup', subgroup);
+            params.append('school1', school1);
+            params.append('school2', school2);
+            window.open(`/spectator?${params.toString()}`, '_blank');
+
             currentMatchData = {
                 player1: p1,
                 player2: p2,
@@ -155,7 +175,7 @@
             matchStarted = false;
             remainingSeconds = 180;
 
-            // 通知后端比赛信息，但不启动倒计时
+            // 通知后端比赛信息，并更新观众页面
             fetch('/update_match', {
                 method: 'POST',
                 headers: {
@@ -169,27 +189,52 @@
               .then(data => {
                   if (data.status === 'success') {
                       document.getElementById('matchModal').style.display = 'block';
+                      // 显示倒计时面板
+                      document.getElementById('timerDisplayReferee').style.display = 'block';
+                      document.getElementById('timerDisplayReferee').textContent = `倒计时: ${formatTime(remainingSeconds)}`;
                   }
               });
         }
 
-        function startTimer() {
-            if (matchStarted) return;
-            matchStarted = true;
-            document.getElementById('startTimer').disabled = true;
-            document.getElementById('pauseTimer').disabled = false;
-            document.getElementById('resumeTimer').disabled = true;
-            startLocalTimer();
-            fetch('/start_match', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    type: 'start_match',
-                    remainingSeconds: remainingSeconds
-                })
-            });
+        function selectWinner(playerNumber) {
+    const winner = playerNumber === 1 ? currentMatchData.player1 : currentMatchData.player2;
+    const school = playerNumber === 1 ? currentMatchData.school1 : currentMatchData.school2;
+    
+    fetch('/select_winner', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            winner: winner,
+            school: school
+        })
+    });
+    
+    document.getElementById('player1Win').disabled = true;
+    document.getElementById('player2Win').disabled = true;
+    document.getElementById('player1Win').classList.remove('bg-green-500');
+    document.getElementById('player1Win').classList.add('bg-gray-400');
+    document.getElementById('player2Win').classList.remove('bg-green-500');
+    document.getElementById('player2Win').classList.add('bg-gray-400');
+}
+
+function startTimer() {
+    if (matchStarted) return;
+    matchStarted = true;
+    document.getElementById('startTimer').disabled = true;
+    document.getElementById('pauseTimer').disabled = false;
+    document.getElementById('resumeTimer').disabled = true;
+    startLocalTimer();
+    fetch('/start_match', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            remainingSeconds: remainingSeconds
+        })
+    });
         }
 
         function startLocalTimer() {
@@ -197,19 +242,31 @@
             timerInterval = setInterval(() => {
                 if (remainingSeconds > 0) {
                     remainingSeconds--;
+                    document.querySelectorAll('#timerDisplayReferee').forEach(el => {
+                        el.textContent = `倒计时: ${formatTime(remainingSeconds)}`;
+                    });
+                    // 同步更新 spectator 页面倒计时
+                    fetch('/update_timer', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            type: 'timer_update',
+                            remainingSeconds: remainingSeconds
+                        })
+                    });
                 } else {
                     clearInterval(timerInterval);
-                    document.getElementById('pauseTimer').disabled = true;
-                    document.getElementById('resumeTimer').disabled = true;
                 }
             }, 1000);
         }
 
         function pauseTimer() {
             clearInterval(timerInterval);
-            document.getElementById('pauseTimer').disabled = true;
+            document.getElementById('pauseTimer').classList.add('paused');
             document.getElementById('resumeTimer').disabled = false;
-            fetch('/update_timer', {
+            fetch('/pause_match', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -223,9 +280,9 @@
 
         function resumeTimer() {
             startLocalTimer();
-            document.getElementById('pauseTimer').disabled = false;
             document.getElementById('resumeTimer').disabled = true;
-            fetch('/update_timer', {
+            document.getElementById('pauseTimer').classList.remove('paused');
+            fetch('/resume_match', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -235,6 +292,13 @@
                     remainingSeconds: remainingSeconds
                 })
             });
+        }
+
+        // 格式化时间为 MM:SS
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
 
         function selectWinner(winner) {

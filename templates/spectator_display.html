@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>比赛观众显示</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="/static/css/tailwind.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         body {
             background: linear-gradient(to bottom, #1a202c, #2d3748);
@@ -29,12 +30,18 @@
             margin: 2rem;
         }
         .player-box {
-            width: 45%;
-            padding: 2rem;
+            width: 50%;
+            padding: 3rem;
             background: #2d3748;
             border-radius: 1rem;
             text-align: center;
             border: 3px solid #b91c1c;
+        }
+        .player-box h2 {
+            font-size: 5rem;
+        }
+        .player-box p {
+            font-size: 3rem;
         }
         .vs-text {
             font-size: 5rem;
@@ -74,6 +81,22 @@
             font-weight: bold;
             color: #b91c1c;
             text-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+        }
+        .match-details {
+            font-size: 2.5rem;
+            text-align: center;
+        }
+        .footer-text {
+            font-size: 0.875rem;
+            text-align: center;
+        }
+        .karate-header h1 {
+            text-align: center;
+        }
+        footer {
+            margin-top: auto;
+            background-color: #1a202c;
+            padding: 0.5rem 0;
         }
         @keyframes pulse {
             0% { transform: scale(1); }
@@ -121,7 +144,7 @@
             </div>
         </div>
         <div class="text-center mt-4">
-            <p class="text-2xl" id="matchDetails">组别: 等待比赛信息...</p>
+            <p class="text-center mt-4 match-details" id="matchDetails">组别: 等待比赛信息...</p>
             <div class="timer-container" id="timerDisplay">倒计时: 03:00</div>
         </div>
     </main>
@@ -132,11 +155,14 @@
     </div>
     <footer class="bg-gray-900 text-white py-4">
         <div class="container mx-auto px-4 text-center">
-            <p>© 2025 Yurong J & Lei T 版权所有</p>
+            <p class="footer-text">© 2025 Yurong J & Lei T 版权所有</p>
         </div>
     </footer>
+</body>
+</html>
     <script>
-        let remainingSeconds = 180; // 3分钟 = 180秒
+        let remainingSeconds = 180;
+        let timerInterval = null;
 
         // 格式化时间为 MM:SS
         function formatTime(seconds) {
@@ -150,68 +176,159 @@
             document.getElementById('timerDisplay').textContent = `倒计时: ${formatTime(remainingSeconds)}`;
         }
 
-        // WebSocket 连接
-        const ws = new WebSocket('ws://' + window.location.host + '/ws/match_updates');
+        // 从 URL 获取参数
+        function getUrlParams() {
+            const params = {};
+            const queryString = window.location.search.substring(1);
+            const pairs = queryString.split('&');
+            for (let pair of pairs) {
+                const [key, value] = pair.split('=');
+                params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+            }
+            return params;
+        }
 
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            if (data.type === 'match_update') {
-                document.getElementById('player1Name').textContent = data.player1;
-                document.getElementById('player2Name').textContent = data.player2;
+        // 初始化页面信息
+        function initMatchInfo() {
+            const params = getUrlParams();
+            if (params.player1 && params.player2) {
+                document.getElementById('player1Name').textContent = params.player1 || '选手1';
+                document.getElementById('player2Name').textContent = params.player2 || '选手2';
+                document.getElementById('player1School').textContent = `学校: ${params.school1 || '未知'}`;
+                document.getElementById('player2School').textContent = `学校: ${params.school2 || '未知'}`;
+                document.getElementById('matchDetails').textContent = 
+                    `组别: ${params.gender || ''} ${params.group || ''} ${params.program || ''} ${params.subgroup || ''}`;
+            }
+        }
+
+        // 显示胜利画面
+        function showVictoryScreen(winner, school) {
+            if (timerInterval) clearInterval(timerInterval);
+            document.getElementById('victoryScreen').style.display = 'flex';
+            document.getElementById('winnerDetails').textContent = `${winner} (${school || '未知'})`;
+            
+            // 生成烟花效果
+            function createFirework() {
+                const firework = document.createElement('div');
+                firework.className = 'firework';
+                firework.style.left = `${Math.random() * 100}%`;
+                firework.style.top = `${Math.random() * 100}%`;
+                firework.style.setProperty('--dx', `${(Math.random() - 0.5) * 200}px`);
+                firework.style.setProperty('--dy', `${(Math.random() - 0.5) * 200}px`);
+                firework.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                
+                document.getElementById('fireworks').appendChild(firework);
+                
+                setTimeout(() => {
+                    firework.remove();
+                }, 1200);
+            }
+            
+            // 定时生成烟花
+            const fireworkInterval = setInterval(() => {
+                createFirework();
+            }, 200);
+            
+            // 10秒后停止生成烟花并隐藏胜利画面
+            setTimeout(() => {
+                clearInterval(fireworkInterval);
+                document.getElementById('fireworks').innerHTML = '';
+                document.getElementById('victoryScreen').style.display = 'none';
+            }, 10000);
+        }
+
+        // WebSocket 连接
+        let socket;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 5000;
+
+        function connectWebSocket() {
+            socket = io.connect('http://' + window.location.host + '/ws/match_updates', {
+                transports: ['websocket'],
+                reconnection: false
+            });
+
+            socket.on('connect', () => {
+                console.log('WebSocket连接已建立');
+                reconnectAttempts = 0;
+            });
+
+            socket.on('match_update', (data) => {
+                console.log('收到比赛更新:', data);
+                document.getElementById('player1Name').textContent = data.player1 || '选手1';
+                document.getElementById('player2Name').textContent = data.player2 || '选手2';
                 document.getElementById('player1School').textContent = `学校: ${data.school1 || '未知'}`;
                 document.getElementById('player2School').textContent = `学校: ${data.school2 || '未知'}`;
                 document.getElementById('matchDetails').textContent = 
-                    `组别: ${data.gender} ${data.group} ${data.program} ${data.subgroup}`;
+                    `组别: ${data.gender || ''} ${data.group || ''} ${data.program || ''} ${data.subgroup || ''}`;
                 document.getElementById('victoryScreen').style.display = 'none';
                 document.getElementById('fireworks').innerHTML = '';
                 remainingSeconds = 180;
                 updateTimerDisplay();
-            } else if (data.type === 'winner') {
+                if (timerInterval) clearInterval(timerInterval);
+            });
+
+            socket.on('timer_update', (data) => {
+                console.log('收到倒计时更新:', data);
+                remainingSeconds = data.remainingSeconds;
+                updateTimerDisplay();
+            });
+
+            socket.on('timer_pause', (data) => {
+                console.log('收到暂停信号:', data);
+                remainingSeconds = data.remainingSeconds;
+                updateTimerDisplay();
+                if (timerInterval) clearInterval(timerInterval);
+            });
+
+            socket.on('timer_resume', (data) => {
+                console.log('收到恢复信号:', data);
+                remainingSeconds = data.remainingSeconds;
+                updateTimerDisplay();
+                if (timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    if (remainingSeconds > 0) {
+                        remainingSeconds--;
+                        updateTimerDisplay();
+                    } else {
+                        clearInterval(timerInterval);
+                    }
+                }, 1000);
+            });
+
+            socket.on('winner', (data) => {
+                console.log('收到获胜者信息:', data);
                 showVictoryScreen(data.winner, data.school);
-            } else if (data.type === 'timer_pause') {
-                remainingSeconds = data.remainingSeconds;
-                updateTimerDisplay();
-            } else if (data.type === 'timer_resume') {
-                remainingSeconds = data.remainingSeconds;
-                updateTimerDisplay();
-            } else if (data.type === 'timer_update') {
-                remainingSeconds = data.remainingSeconds;
-                updateTimerDisplay();
-            }
-        };
+            });
 
-        function showVictoryScreen(winner, school) {
-            document.getElementById('winnerDetails').textContent = `${winner} (${school || '未知'})`;
-            document.getElementById('victoryScreen').style.display = 'flex';
+            socket.on('disconnect', () => {
+                console.log('WebSocket连接已关闭');
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    console.log(`尝试重连 (${reconnectAttempts}/${maxReconnectAttempts})...`);
+                    setTimeout(connectWebSocket, reconnectDelay);
+                } else {
+                    console.log('达到最大重连次数，停止重连');
+                }
+            });
 
-            // 创建烟花效果
-            const fireworksContainer = document.getElementById('fireworks');
-            for (let i = 0; i < 30; i++) {
-                const firework = document.createElement('div');
-                firework.className = 'firework';
-                const angle = Math.random() * 360;
-                const distance = 100 + Math.random() * 200;
-                const dx = Math.cos(angle) * distance;
-                const dy = Math.sin(angle) * distance;
-                firework.style.setProperty('--dx', `${dx}px`);
-                firework.style.setProperty('--dy', `${dy}px`);
-                firework.style.left = `${50 + (Math.random() - 0.5) * 20}%`;
-                firework.style.top = `${50 + (Math.random() - 0.5) * 20}%`;
-                fireworksContainer.appendChild(firework);
-            }
-
-            // 5秒后隐藏胜利画面
-            setTimeout(() => {
-                document.getElementById('victoryScreen').style.display = 'none';
-                document.getElementById('fireworks').innerHTML = '';
-            }, 5000);
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket连接错误:', error);
+                setTimeout(() => {
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        console.log(`尝试重连 (${reconnectAttempts}/${maxReconnectAttempts})...`);
+                        connectWebSocket();
+                    }
+                }, reconnectDelay);
+            });
         }
 
-        ws.onclose = function() {
-            console.log('WebSocket连接已关闭，正在尝试重连...');
-            setTimeout(() => {
-                window.location.reload();
-            }, 5000);
+        // 页面加载时初始化信息并连接 WebSocket
+        window.onload = function() {
+            initMatchInfo();
+            connectWebSocket();
         };
     </script>
 </body>
