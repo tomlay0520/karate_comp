@@ -503,44 +503,6 @@ def test():
 def handle_connect():
     print('客户端已连接')
 
-# 注释掉原有的重复路由定义部分
-# # 路由：处理比赛信息更新
-# @app.route('/update_match', methods=['POST'])
-# def update_match():
-#     data = request.get_json()
-#     socketio.emit('match_update', data, namespace='/ws/match_updates')
-#     return jsonify({'status': 'success'})
-# 
-# # 路由：处理开始比赛
-# @app.route('/start_match', methods=['POST'])
-# def start_match():
-#     global current_timer
-#     data = request.get_json()
-#     current_timer['remaining_seconds'] = data['remainingSeconds']
-#     current_timer['is_paused'] = False
-#     current_timer['match_active'] = True
-#     start_timer_thread()
-#     return jsonify({'status': 'success'})
-# 
-# # 路由：处理暂停比赛
-# @app.route('/pause_match', methods=['POST'])
-# def pause_match():
-#     global current_timer
-#     data = request.get_json()
-#     current_timer['remaining_seconds'] = data['remainingSeconds']
-#     current_timer['is_paused'] = True
-#     socketio.emit('timer_pause', data, namespace='/ws/match_updates')
-#     return jsonify({'status': 'success'})
-# 
-# # 路由：处理恢复比赛
-# @app.route('/resume_match', methods=['POST'])
-# def resume_match():
-#     global current_timer
-#     data = request.get_json()
-#     current_timer['remaining_seconds'] = data['remainingSeconds']
-#     current_timer['is_paused'] = False
-#     socketio.emit('timer_resume', data, namespace='/ws/match_updates')
-#     return jsonify({'status': 'success'})
 
 @socketio.on('disconnect', namespace='/ws/match_updates')
 def handle_disconnect():
