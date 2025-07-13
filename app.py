@@ -19,6 +19,10 @@ def favicon():
 app.secret_key = 'your_secret_key'
 app.config['UPLOAD_FOLDER'] = 'Uploads'
 
+
+current_round = 1 #比赛轮次
+lost_players = [] #记录比赛输掉的选手
+
 # 定义路径
 MODEL_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'model')
 DB_PATH = os.path.join(MODEL_DIR, 'ath.db')
@@ -148,6 +152,10 @@ def spectator():
 # 路由：比赛对阵页面
 @app.route('/stu_generate_matching')
 def stu_generate_matching():
+    global current_round
+
+    all_players = AthStu.query.filter(AthStu.name.notin_(lost_players)).all()
+
     groups = categorize_players()
     matches = []
     
